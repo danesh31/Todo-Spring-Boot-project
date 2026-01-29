@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>User Todo App</title>
+
+<style>
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: linear-gradient(120deg, #0f172a, #2f6f6f);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding-top: 40px;
+    font-family: Arial, sans-serif;
+}
+
+.app-wrapper {
+    width: 100%;
+    max-width: 480px;
+    background: #fff;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+}
+
+.container {
+    width: 420px;
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+}
+
+input, button, textarea {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+.todo {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    background: #eee;
+    margin-top: 5px;
+}
+
+.completed {
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+.logout {
+    display: flex;
+    justify-content:center;
+    margin-top: 20px;
+}
+
+.logout button {
+    background: #237988;
+    color: #fff;
+    border: none;
+    padding: 10px;
+    border-radius: 5px;
+}
+</style>
+</head>
+
+<body>
+<div class="app-wrapper">
+
+<!-- AUTH -->
+<div class="container" id="authBox">
+    <h2>Login / Register</h2>
+    <input id="email" placeholder="Email">
+    <input id="password" type="password" placeholder="Password">
+    <button onclick="login()">Login</button>
+    <button onclick="register()">Register</button>
+</div>
+
+<!-- TODOS -->
+<div class="container" id="todoBox" style="display:none">
+    <h2>My Todos</h2>
+    <input id="title" placeholder="Todo title">
+    <textarea id="description" rows="3" placeholder="description"></textarea>
+    <button onclick="addTodo()">Add</button>
+    <div id="todoList"></div>
+    <div class="logout">
+        <button onclick="logout()">Logout</button>
+    </div>
+</div>
+
+</div>
+
+<script>
+const BASE = "http://localhost:8080/api";
+
+let authHeader = null;
+let userId = null;
+
+/* ---------------- AUTH ---------------- */
+
+function login() {
+    const emailVal = email.value;
+    const passVal = password.value;
+
+    authHeader = "Basic " + btoa(emailVal + ":" + passVal);
+
+    // 🔹 call a protected API to verify login
+    fetch(`${BASE}/users/me`, {
+        headers: {
+            "Authorization": authHeader
+        }
+    })
+    .then(res => {
+        if (!res.ok) throw new Error("Invalid login");
+        return res.json();
+    })
+    .then(user => {
+        userId = user.id;
+        authBox.style.display = "none";
+        todoBox.style.display = "block";
+        loadTodos();
+    })
+    .catch(() => alert("Invalid email or password"));
+}
+
+function register() {
+    fetch(`${BASE}/users/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            email: email.value,
+            password: password.value
+        })
+    })
+    .then(res => {
+        if (!res.ok) throw new Error();
+        return res.text();
+    })
+    .then(msg => alert(msg))
+    .catch(() => alert("Password must be at least 8 characters"));
+}
+
+function logout() {
+    authHeader = null;
+    userId = null;
+    todoBox.style.display = "none";
+    authBox.style.display = "block";
+}
+
+/* ---------------- TODOS ---------------- */
+
+function loadTodos() {
+    fetch(`${BASE}/todos/all/${userId}`, {
+        headers: { "Authorization": authHeader }
+    })
+    .then(res => res.json())
+    .then(data => {
+        todoList.innerHTML = "";
+        data.forEach(t => {
+            todoList.innerHTML += `
+                <div class="todo ${t.completed ? "completed" : ""}">
+                    <div>
+                        <h4>${t.title}</h4>
+                        <p>${t.description}</p>
+                    </div>
+                    <div>
+                        <button onclick="updateTodo(${t.id})">✔</button>
+                        <button onclick="deleteTodo(${t.id})">❌</button>
+                    </div>
+                </div>
+            `;
+        });
+    });
+}
+
+function addTodo() {
+    fetch(`${BASE}/todos/${userId}`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": authHeader
+        },
+        body: JSON.stringify({
+            title: title.value,
+            description: description.value,
+            completed: false
+        })
+    }).then(() => {
+        title.value = "";
+        description.value = "";
+        loadTodos();
+    });
+}
+
+function updateTodo(id) {
+    fetch(`${BASE}/todos/single/${id}`, {
+        headers: { "Authorization": authHeader }
+    })
+    .then(res => res.json())
+    .then(todo => {
+        return fetch(`${BASE}/todos/update/${id}`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": authHeader
+            },
+            body: JSON.stringify({
+                title: todo.title,
+                description: todo.description,
+                completed: true
+            })
+        });
+    })
+    .then(() => loadTodos());
+}
+
+function deleteTodo(id) {
+    fetch(`${BASE}/todos/${id}`, {
+        method: "DELETE",
+        headers: { "Authorization": authHeader }
+    }).then(() => loadTodos());
+}
+</script>
+
+</body>
+</html>
